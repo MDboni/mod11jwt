@@ -44,23 +44,35 @@ const VerifyToken = async(req,res,next)=>{
   const useAuth = req.headers?.authorization
 
   if(!useAuth || !useAuth.startsWith('Bearer ')){
-    return res.status(401).send({message:"Unauthrozied"})
+    return res.status(401).send({message:"Aie koie jas fajlamikoros"})
   }
 
   const token = useAuth.split(' ')[1]
 
   try {
     const decoded = await admin.auth().verifyIdToken(token)
-    console.log('Decoded User', decoded);
-    
     req.decode = decoded ;
-    next()
-    
+
+    next()  
   } catch (error) {
      console.error("Token verification failed:", error);
     return res.status(403).send({ message: "Forbidden" });
   }
    
+}
+
+const VerifyEmailTOken = async(req,res,next)=>{
+ try {
+    console.log("Query email:", req.query.email);
+    console.log("Decoded email:", req.decode?.email)
+
+   if( req.query.email !== req.decode.email || !req.decode.email ){
+    return res.status(403).send({message: "forbidden Token"})
+  }
+  next()
+ } catch (error) {
+      return res.status(500).send({ message: "Email verification failed", error: error.message })
+ }
 }
 
 async function run() {
@@ -88,21 +100,27 @@ async function run() {
 
 // ................................................................................................ 
     const userCollection = client.db('ABCD').collection('XYZ')
+    const privateCollection = client.db('ABCD').collection('OPQ')
     const ApplyCollection = client.db('ABCD').collection('LMN')
 
-    app.get('/user', VerifyToken ,async(req,res)=>{
-       const user = req.query.email 
-
-       let query = {}
-       if(user){
-        query = { hr_email:user }
-       }
-
+    app.get('/private', VerifyToken ,async(req,res)=>{
+        
+      const data = await privateCollection.find().toArray()
+      console.log("Private token: ",req.headers)
       
-
-        const data =await userCollection.find(query).toArray()
-        res.send(data)
+      res.send(data)
     })
+
+  app.get('/user', async(req,res)=>{
+   const user = req.query.email 
+   let query = {}
+   if(user){
+     query = { hr_email:user }
+   }
+   const data = await userCollection.find(query).toArray()
+   res.send(data)
+})
+
 
     app.get('/user/:id',async(req,res)=>{
         const data = req.params.id 
@@ -127,12 +145,10 @@ async function run() {
         res.json(result)
     })
 
-    app.get('/apply',VerifyToken ,async(req,res)=>{
+    app.get('/apply',VerifyToken ,VerifyEmailTOken,async(req,res)=>{
       const data = req.query.email 
      
-      if(data !== req.decode.email){
-            return res.status(403).send({ message: "Forbidden: Email mismatch" });
-      }
+     
  
       const match = {email:data}
       const result = await ApplyCollection.find(match).toArray()
